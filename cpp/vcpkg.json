@@ -1,0 +1,13 @@
+{
+  "name": "mdlake-cpp",
+  "version": "1.0.0",
+  "description": "market-lake 第 10 章：单遍顺序回放（Parquet -> 分钟 bar -> 双均线）",
+  "builtin-baseline": "d5cb5b9392b89fe9ad25786022415999202277d6",
+  "dependencies": [
+    {
+      "name": "arrow",
+      "features": ["compute", "dataset"]
+    },
+    "parquet"
+  ]
+}

@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+# 原则：仓库里只放"能重新生成其它一切"的东西——源码、脚本、正文、依赖清单。
+# 凡是跑一次就能再产出的（数据、构建目录、站点产物、依赖安装树），一律不入库。
+# ---------------------------------------------------------------------------
+
+# 生成数据与实验产物
+#   行情数据由 py/gen_tick.py 生成，lake 布局由 py/w08_lake.py 等重建
+lake/data/
+reports/*.html
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Rust
+rust/target/
+
+# C++：依赖由 cpp/vcpkg.json 清单还原（~3.6 GB），构建目录随时可重编
+cpp/build/
+cpp/build-*/
+cpp/vcpkg_installed/
+cpp/compile_commands.json
+cpp/*.exe
+cpp/*.dll
+cpp/*.pdb
+cpp/obj/
+/build/
+/build-*/
+
+# 站点构建产物：zensical build 一条命令重出
+site/_build/
+site-build/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.workbuddy
+
+# 临时与日志
+.tools-tmp/
+*.log
+tmp/

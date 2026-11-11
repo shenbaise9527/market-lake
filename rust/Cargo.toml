@@ -1,0 +1,19 @@
+[package]
+name = "mdlake"
+version = "0.1.0"
+edition = "2021"
+description = "行情数据湖命令行工具：Parquet 元数据解剖 / 排序重写 / 扫描统计"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+arrow = "60.1.0"
+parquet = { version = "60.1.0", default-features = false, features = [
+    "arrow",
+    "zstd",
+    "snap",
+    "lz4",
+] }
+
+[profile.release]
+opt-level = 3

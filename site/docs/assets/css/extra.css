@@ -1,0 +1,152 @@
+/* ── 布局：随视口连续自适应，不靠断点跳变 ──────────────────────────────
+   主题默认 .md-grid{max-width:61rem}（≈976px），扣掉两侧各 12.1rem 的侧栏后，
+   正文列只剩 ~590px，图解再大也没处放。
+   这里改成「永远占满视口减一点边距，宽屏封顶 1680px」：
+   1000px 屏 → 正文 ~610px，1440px 屏 → ~1010px，1920px 屏 → ~1150px，
+   中间连续变化，没有跳跃。
+   注：主题在 ≥100em 时把根字号提到 137.5%，所以封顶用 px 而不是 rem，
+   否则 rem 上限会随根字号一起放大、失去封顶作用。 */
+body .md-grid {
+  max-width: min(calc(100vw - 3rem), 1680px);
+}
+
+/* 正文只对文字块限行宽（约 42 字），图 / 表格 / 代码不受限，继续吃满整列 */
+.md-typeset > p,
+.md-typeset > ul,
+.md-typeset > ol,
+.md-typeset > dl,
+.md-typeset > blockquote {
+  max-width: 44rem;
+}
+
+/* 图解容器：内联 SVG 跟随主题色（图内统一用 currentColor），这里只负责排版与放大 */
+.md-typeset figure.diagram {
+  position: relative;
+  /* 关键：主题给 .md-typeset figure 设了 width: fit-content，会让 width:100% 的 svg
+     陷入循环依赖而回落到 300x150 默认尺寸（图永远只有 300px 的根因）。
+     必须显式改回 auto，块级宽度不再依赖内容，svg 的百分比才有确定参照。 */
+  width: auto;
+  /* 图也跟着列宽自适应，但设一个上限：图内文字是按 680 的设计宽度排的，
+     放到 1000 约 1.47 倍、字号 ~17.8px，已经很清楚；再宽字就过大、留白过多 */
+  max-width: 1000px;
+  margin: 1.4rem 0 1.7rem;
+  padding: 0.5rem 0.55rem 0.4rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+  background: var(--md-code-bg-color);
+  overflow-x: auto;
+}
+
+.md-typeset figure.diagram > svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  cursor: zoom-in;
+}
+
+/* 小屏（<720px）：不让图继续等比缩小（否则字号小到看不清），
+   而是按可读尺寸渲染、容器横向滚动；配合点击放大使用 */
+@media screen and (max-width: 44.9375em) {
+  .md-typeset figure.diagram > svg {
+    width: 40rem;
+    max-width: none;
+  }
+}
+
+/* 右上角“点击放大”提示，只在悬停时出现，不占版面 */
+.md-typeset figure.diagram::after {
+  content: "点击放大";
+  position: absolute;
+  top: 0.4rem;
+  right: 0.45rem;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.6rem;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.md-typeset figure.diagram:hover::after {
+  opacity: 1;
+}
+
+.md-typeset figure.diagram > figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.7rem;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ── 放大浮层（点击图解触发，由 assets/js/diagram-zoom.js 创建）───────── */
+.dz-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.2rem 1rem;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff; /* 深色底 + 白色 currentColor，浅色主题下图内线条也可见 */
+  cursor: zoom-out;
+}
+
+.dz-host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 94vw;
+  max-height: 86vh;
+  overflow: auto;
+}
+
+.dz-svg {
+  display: block;
+  width: min(1600px, 92vw);
+  height: auto;
+}
+
+.dz-hint {
+  position: absolute;
+  bottom: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.dz-close {
+  position: absolute;
+  top: 0.8rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dz-close:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+@media print {
+  .dz-overlay {
+    display: none;
+  }
+  .md-typeset figure.diagram::after {
+    display: none;
+  }
+}

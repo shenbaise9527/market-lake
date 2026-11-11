@@ -1,0 +1,84 @@
+site_name: 行情数据湖 · 学习手册
+site_description: Parquet / Arrow / DuckDB / Polars —— 面向海量行情数据的本地学习手册
+docs_dir: docs
+site_dir: _build
+
+# Zensical 用 theme.variant 区分外观：classic 保持 Material for MkDocs 的样子。
+# palette 支持 scheme default / slate 与 toggle，primary / accent 不支持（配色由 variant 决定）。
+theme:
+  variant: classic
+  language: zh
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: lucide/sun-moon
+        name: 跟随系统
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: lucide/sun
+        name: 切换到深色
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: lucide/moon
+        name: 切换到浅色
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.tracking
+    - navigation.footer
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.footnote.tooltips
+    - search.highlight
+
+extra_css:
+  - assets/css/extra.css
+
+extra_javascript:
+  - assets/js/diagram-zoom.js
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: "#"
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.smartsymbols
+
+# 搜索由 Zensical 内置，无需 plugins 声明（声明了也接受，但 lang 会被忽略）
+
+nav:
+  - 开始: index.md
+  - 正文:
+      - 第 1 章 · 列存为什么快: ch01-columnar-basics.md
+      - 第 2 章 · Parquet 物理结构: ch02-parquet-layout.md
+      - 第 3 章 · 写入器与编码: ch03-encodings.md
+      - 第 4 章 · Arrow 内存模型: ch04-arrow-memory.md
+      - 第 5 章 · IPC · Flight · 零拷贝: ch05-arrow-ipc.md
+      - 第 6 章 · DuckDB 查询与下推: ch06-duckdb.md
+      - 第 7 章 · Polars 与 DataFusion: ch07-polars-datafusion.md
+      - 第 8 章 · 数据湖工程: ch08-lake-engineering.md
+      - 第 9 章 · 性能调优: ch09-tuning.md
+      - 第 10 章 · 实战整合: ch10-capstone.md
+  - 附录:
+      - 调参速查表: appendix/cheatsheet.md
+      - 术语表: appendix/glossary.md
+      - 出处与核对状态: appendix/sources.md

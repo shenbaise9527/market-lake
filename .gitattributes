@@ -1,0 +1,17 @@
+# 统一换行：仓库内一律 LF，Windows 检出不受 core.autocrlf 影响。
+# 这里是"能在 Windows / Linux 两边跑"的项目，脚本与 CMake 一旦被转成 CRLF，
+# 到 Linux 上 shebang 会直接报 `bad interpreter`，所以钉死。
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# 二进制资源不做任何转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.parquet binary
+*.zip  binary

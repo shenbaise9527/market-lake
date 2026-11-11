@@ -1,0 +1,25 @@
+[project]
+name = "market-lake"
+version = "0.1.0"
+description = "学习用行情数据湖：Parquet + Arrow + DuckDB + Polars（Python/Rust/C++ 三语言练习）"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=18",
+    "polars>=1.0",
+    "duckdb>=1.1",
+    "pytz>=2026.6",
+]
+
+[tool.uv]
+# 合成数据与基准实验为主，锁到确定版本便于复现 bench 结论
+package = false
+
+[dependency-groups]
+# 放在 dev 组：uv run 默认包含 dev，所以 `uv run zensical serve` 开箱可用
+dev = [
+    "pillow>=13.0.0",
+    "psutil>=7.2.2",
+    "zensical>=0.1.1",
+]

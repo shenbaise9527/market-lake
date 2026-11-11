@@ -1,0 +1,81 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed"
+      }
+    },
+    {
+      "name": "windows",
+      "displayName": "Windows x64 (MSVC 2022, 静态 CRT)",
+      "description": "vcpkg x64-windows-static：单 exe，运行期不依赖任何第三方 DLL",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "x64", "strategy": "set" },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "VCPKG_DEFAULT_TRIPLET": "x64-windows-static"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static"
+      }
+    },
+    {
+      "name": "linux",
+      "displayName": "Linux x64 (gcc, 静态链接)",
+      "description": "自定义 triplet x64-linux-static：单文件 ELF，运行期不需要 LD_LIBRARY_PATH",
+      "inherits": "base",
+      "generator": "Ninja",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "environment": {
+        "VCPKG_DEFAULT_TRIPLET": "x64-linux-static"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-linux-static",
+        "VCPKG_HOST_TRIPLET": "x64-linux",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/triplets",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux x64 Debug",
+      "inherits": "linux",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "linux-make",
+      "displayName": "Linux x64 (gcc, Unix Makefiles)",
+      "description": "机器上没有 ninja 时用这个；除生成器外与 linux 预设完全一致",
+      "inherits": "linux",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-make"
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-release", "configurePreset": "windows", "configuration": "Release" },
+    { "name": "windows-debug", "configurePreset": "windows", "configuration": "Debug" },
+    { "name": "linux-release", "configurePreset": "linux" },
+    { "name": "linux-debug", "configurePreset": "linux-debug" },
+    { "name": "linux-make-release", "configurePreset": "linux-make" }
+  ]
+}
