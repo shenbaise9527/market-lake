@@ -80,5 +80,6 @@ nav:
       - 第 10 章 · 实战整合: ch10-capstone.md
   - 附录:
       - 调参速查表: appendix/cheatsheet.md
+      - Polars 常用方法速查: appendix/polars-cookbook.md
       - 术语表: appendix/glossary.md
       - 出处与核对状态: appendix/sources.md

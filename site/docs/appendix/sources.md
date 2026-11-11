@@ -85,14 +85,7 @@
 | `py/capstone_query.py` | 查询层视图 / 指纹对比 / 质量闸门 / C4 交叉验证 | 第 10 章 |
 | `rust/src/ingest.rs` | 生产写入路径（排序 → 分区 → 幂等落盘） | 第 10 章 |
 | `cpp/main.cpp` | Arrow C++ 单遍顺序回放（双均线信号） | 第 10 章 |
-| `py/w04_arrow_memory.py` | buffer 布局 / 零拷贝边界 / 字典 / 对齐实测 | 第 4 章 |
-| `py/w05_ipc.py` | 序列化矩阵 / file vs stream / C Data 胶囊 / Flight | 第 5 章 |
-| `py/w06_duckdb.py` | EXPLAIN ANALYZE / 列裁剪 / ASOF 计划陷阱 | 第 6 章 |
-| `py/w07_polars.py` | 三引擎对齐 / group_by_dynamic / sink 边界 | 第 7 章 |
-| `py/w08_lake.py` | 分区 / 幂等 / 去重键 / rollup / compaction / 质量报告 | 第 8 章 |
-| `py/w09_bench.py` | 基准四要素 / 36 组矩阵 / 帕累托 / 尾延迟 / 规模放大 | 第 9 章 |
-| `py/capstone_query.py` | 查询层视图 / 指纹对比 / 质量闸门 / C4 交叉验证 | 第 10 章 |
-| `rust/src/ingest.rs` | 生产写入路径（排序 → 分区 → 幂等落盘） | 第 10 章 |
+| `py/polars_cookbook.py` | Polars 常用方法示例集（全部输出实跑） | 附录 · Polars 速查 |
 | `cpp/main.cpp` | Arrow C++ 单遍顺序回放（双均线信号） | 第 10 章 |
 
 环境：Python 3.13（uv 管理，`uv sync` 复现）／ pyarrow 26.0.1 ／ polars 2.1.0 ／ duckdb 2.0.0 ／

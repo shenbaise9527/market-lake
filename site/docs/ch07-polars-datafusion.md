@@ -6,6 +6,7 @@
     3. `sink_parquet` 不是"免内存"：带全局 `sort` 时要 **+584 MB**，反而比 `collect` 后写（+259 MB）更多。真正省内存的是**去掉全局排序**（+110 MB）。流式的边界是"算子是否全局"，不是"函数名叫 sink"。
 
 对应任务卡：仓库内 `docs/week07.md` ｜ 本章实验脚本：`py/w07_polars.py` ｜ 原始结果：`reports/w07-polars.md`
+日常 API 怎么写：[附录 · Polars 常用方法速查](appendix/polars-cookbook.md)
 
 ---
 

@@ -79,6 +79,7 @@
 ## 附录
 
 - [调参速查表](appendix/cheatsheet.md) —— 十周后最值钱的一页
+- [Polars 常用方法速查](appendix/polars-cookbook.md) —— 想做什么 → 怎么写，含 pandas 对照
 - [术语表](appendix/glossary.md) —— 行组、页、offsets、validity bitmap 等
 - [出处与核对状态](appendix/sources.md) —— 全部参考资料、用途、可信度分层
 
