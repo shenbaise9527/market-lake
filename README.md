@@ -37,6 +37,11 @@
 ## 快速开始
 
 ```bash
+# 0) 取代码并装 Python 依赖（数据、依赖树、构建产物都不在仓库里，克隆只有 ~1.4 MB）
+git clone https://github.com/shenbaise9527/market-lake.git
+cd market-lake
+uv sync
+
 # 1) 生成合成行情（含乱序/重复/缺口/异常值，故意的）
 uv run python py/gen_tick.py --days 2 --rows 300000 --symbols 4 --with-book
 
