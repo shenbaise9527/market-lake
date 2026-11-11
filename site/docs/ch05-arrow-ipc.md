@@ -273,7 +273,7 @@ Flight 是"把 IPC 放到 gRPC 上"，加了三样 IPC 没有的东西：**认�
 ## 7. 代码
 
 ```bash
-cd E:\work\learning\market-lake
+cd market-lake
 uv run python py/w05_ipc.py     # 约 15 秒（含 JSON 序列化与 Flight 起停）
 cat reports/w05-ipc.md
 ```

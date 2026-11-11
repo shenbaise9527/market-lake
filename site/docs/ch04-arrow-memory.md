@@ -235,7 +235,7 @@ Arrow 里"表"有三层，名字很容易混：
 ## 7. 代码：把布局打印出来
 
 ```bash
-cd E:\work\learning\market-lake
+cd market-lake
 uv run python py/w04_arrow_memory.py      # 全流程约 3 秒
 cat reports/w04-arrow.md
 ```

@@ -44,5 +44,7 @@ Thumbs.db
 
 # 临时与日志
 .tools-tmp/
+tools/_chrome/
+tools/_measure.html
 *.log
 tmp/

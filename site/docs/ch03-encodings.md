@@ -376,7 +376,7 @@ cd rust && cargo run -q --release -- pages \
 ## 7. 代码：把这套矩阵跑一遍
 
 ```bash
-cd E:\work\learning\market-lake
+cd market-lake
 
 # 全矩阵（E0/E1a/E1b/E2/E3/E3b/E4，约 1 分钟）
 uv run python py/w03_writer.py

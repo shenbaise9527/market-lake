@@ -68,6 +68,36 @@ uv run python py/verify.py
 
 ---
 
+## 学习网站（本地）
+
+十章正文不是散在 markdown 里读的——它们被构建成一个本地站点：带搜索、深浅色切换、
+图能点开放大。有些结论（读放大、计划形状、RSS 曲线）只有对着图看才立得住。
+
+```bash
+# 起预览（默认 http://localhost:8000；端口被占用就换一个）
+uv run zensical serve -f site/mkdocs.yml -a 127.0.0.1:8012
+
+# 只构建静态站，产物落在 site/_build/（已 gitignore，可随时删）
+uv run zensical build -f site/mkdocs.yml
+```
+
+站点是 [Zensical](https://zensical.org)（Material for MkDocs 的后继），配置就是一份 `site/mkdocs.yml`。
+
+| 想改什么 | 改哪里 |
+|---|---|
+| 正文、图解 | `site/docs/ch*.md` |
+| 导航顺序、主题、markdown 扩展 | `site/mkdocs.yml` |
+| 图解与排版的写作约定（**新写一章前必看**） | `site/WRITING.md` |
+
+> **仓库里有两个 `docs`，含义不同**
+>
+> - 根 `docs/`：每周任务卡与学习计划（目标 / 阅读 / 动手 / 验收 / 坑）
+> - `site/docs/`：站点正文，也就是那十章
+>
+> 改正文别改错地方。
+
+---
+
 ## 目录
 
 ```
@@ -81,11 +111,20 @@ market-lake/
 │   └── cheatsheet.md     调参结论速查表（你自己填，这是最值钱的产出）
 ├── py/
 │   ├── gen_tick.py       合成 tick 生成器（注入四类脏数据）
+│   ├── w01..w09_*.py     各章实验脚本：跑出实测数字，结果写进 reports/
+│   ├── capstone_query.py 第 10 章：查询层视图 + 指纹对比 + 质量闸门
 │   ├── q_duckdb.py       五个必练 SQL（含 ASOF JOIN）
 │   ├── q_polars.py       惰性求值 / group_by_dynamic / join_asof / sink
 │   ├── cdata_demo.py     Arrow 零拷贝验证 + 内存地址对比
 │   ├── bench.py          基准矩阵，输出 markdown 表
 │   └── verify.py         验收自检
+├── site/                 学习网站：十章正文 + SVG 图解（`uv run zensical serve`）
+│   ├── mkdocs.yml        nav / 主题 / markdown 扩展
+│   ├── docs/             ch01..ch10 正文 + appendix（速查表、术语表、出处核对）
+│   └── WRITING.md        图解与排版约定（新写一章前必看）
+├── reports/              每章实验的实测记录——正文里的数字都出自这里
+├── tools/
+│   └── measure_svg.py    量 SVG 实际 bbox，用来收紧 viewBox
 ├── rust/                 mdkake 命令行：inspect / rewrite / scan
 ├── cpp/                  C++ 回放器（vcpkg 清单装 Arrow/Parquet，静态单 exe）
 └── lake/                 数据目录（不入库）
@@ -133,18 +172,19 @@ market-lake/
 | 组件 | 版本 | 备注 |
 |---|---|---|
 | Python | **用 uv 管理**（uv 0.9.5，Python ≥3.12） | `uv sync` 一键建 `.venv` 并锁版本，见下方 |
-| Rust | cargo 1.99，arrow + parquet 60.1.0 | `CARGO_TARGET_DIR=D:\rust\cargo\bin`，所以二进制不在 `rust/target/` 下，用 `cargo run --` |
+| Rust | cargo 1.99，arrow + parquet 60.1.0 | 若设了 `CARGO_TARGET_DIR`，二进制不在 `rust/target/` 下，用 `cargo run --` 即可 |
 | C++ | cmake 3.30 + vcpkg | 依赖由 `cpp/vcpkg.json` 声明，首次 configure 自动装（Windows 3.6 GB / Linux 1.4 GB，不入库）；两个平台的构建与实测见 `cpp/build.md` |
+| 站点 | Zensical 0.1.1 | 在 `pyproject.toml` 的 dev 依赖组里，`uv sync` 后即可 `uv run zensical serve` |
 
 **Python 一律通过 uv 运行**（依赖声明在 `pyproject.toml`，锁定在 `uv.lock`）：
 
 ```bash
-cd E:\work\learning\market-lake
+cd market-lake
 uv sync                          # 首次：创建 .venv 并安装全部依赖
-uv run uv run python py/verify.py       # 之后所有脚本都用 uv run
+uv run python py/verify.py       # 之后所有脚本都用 uv run
 ```
 
-不要再用系统 `python` 或 `C:\Python312\python.exe`——那个环境是临时装的，uv 的 `.venv` 才是本仓库的唯一事实来源。换机器时只需 `uv sync` 一条命令恢复全部依赖。
+不要用系统 `python`——uv 的 `.venv` 才是本仓库的唯一事实来源。换机器时只需 `uv sync` 一条命令恢复全部依赖。
 
 ---
 

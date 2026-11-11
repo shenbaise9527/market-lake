@@ -1,7 +1,7 @@
 # 行情数据湖 · 学习手册
 
 面向**海量行情数据**的本地学习手册：Parquet / Arrow / DuckDB / Polars，三语言（Python / Rust / C++）落地。
-配套代码仓：`E:\work\learning\market-lake`。所有数字都是本机实测，出处逐条挂脚注。
+配套代码仓：<https://github.com/shenbaise9527/market-lake>。所有数字都是本机实测，出处逐条挂脚注。
 
 ## 这个站解决什么问题
 
@@ -85,7 +85,7 @@
 ## 维护
 
 ```bash
-cd E:\work\learning\market-lake
+cd market-lake
 uv run zensical serve -f site/mkdocs.yml    # 本地预览 http://127.0.0.1:8000
 uv run zensical build -f site/mkdocs.yml    # 产出静态站到 site/_build/
 ```
