@@ -31,7 +31,7 @@
 ## 4. 自检
 
 ```bash
-cd E:/work/learning/market-lake
+cd <repo>            # 仓库根目录
 uv run zensical build -f site/mkdocs.yml
 python -c "
 import pathlib,re

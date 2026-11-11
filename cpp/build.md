@@ -47,7 +47,7 @@ cmake --build --preset windows-release
 
 ## 2. Linux（gcc，静态链接）—— 已在真机跑通
 
-实测机器：Ubuntu 24.04 / 8 核 Xeon E5-2630 v4 @ 2.20 GHz / 15 GB / `172.16.30.240`。
+实测机器：Ubuntu 24.04 / 8 核 Xeon E5-2630 v4 @ 2.20 GHz / 15 GB / 系统自带 cmake 3.28.3。
 
 ### 2.1 前置：系统工具
 
