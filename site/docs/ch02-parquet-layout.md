@@ -154,7 +154,7 @@ Parquet 的层级是 `file → row group → column chunk → page`。名字很�
 page 是"解压"和"剪枝"的最小单位。它的内部布局比大多数人以为的复杂：
 
 <figure class="diagram">
-<svg width="100%" viewBox="0 0 680 168" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+<svg width="100%" viewBox="0 0 680 184" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
 <title>data page v1 的内部布局</title>
 <desc>一个数据页由 thrift 编码的页头、重复级别、定义级别和值主体组成；重复与定义级别用 RLE 编码，值主体用该列选择的编码。</desc>
 <text x="0" y="14" font-size="13.2" font-weight="500" fill="currentColor">data page v1</text>
@@ -172,10 +172,10 @@ page 是"解压"和"剪枝"的最小单位。它的内部布局比大多数人�
 </g>
 <text x="0" y="92" font-size="11.5" fill="currentColor" fill-opacity="0.8">header 里有：页类型、未压缩/压缩字节数、值个数、levels 的编码方式（RLE），以及页级统计（可选，pyarrow 会写）。</text>
 <text x="0" y="110" font-size="11.5" fill="currentColor" fill-opacity="0.8">注意 v1 页头不含 levels 的字节长度——要解出 levels 才知道 values 从哪开始（v2 补上了，见下图）。</text>
-<text x="0" y="110" font-size="11.5" fill="currentColor" fill-opacity="0.8">repetition levels 只在嵌套类型（LIST / STRUCT）里出现；扁平表里这一段的长度为 0。</text>
-<text x="0" y="128" font-size="11.5" fill="currentColor" fill-opacity="0.8">definition levels 记录"这一行是不是 null"，非空列全 0 长度，所以扁平非空表几乎不占空间。</text>
-<line x1="0" y1="140" x2="680" y2="140" stroke="currentColor" stroke-opacity="0.15"/>
-<text x="0" y="160" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">v2 把 levels 移出压缩体，单独一段：不解压 values 也能先按 levels 判断有没有数据可跳。</text>
+<text x="0" y="128" font-size="11.5" fill="currentColor" fill-opacity="0.8">repetition levels 只在嵌套类型（LIST / STRUCT）里出现；扁平表里这一段的长度为 0。</text>
+<text x="0" y="146" font-size="11.5" fill="currentColor" fill-opacity="0.8">definition levels 记录"这一行是不是 null"，非空列全 0 长度，所以扁平非空表几乎不占空间。</text>
+<line x1="0" y1="158" x2="680" y2="158" stroke="currentColor" stroke-opacity="0.15"/>
+<text x="0" y="178" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">v2 把 levels 移出压缩体，单独一段：不解压 values 也能先按 levels 判断有没有数据可跳。</text>
 </svg>
 </figure>
 
