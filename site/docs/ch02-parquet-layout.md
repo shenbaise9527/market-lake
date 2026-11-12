@@ -170,7 +170,8 @@ page 是"解压"和"剪枝"的最小单位。它的内部布局比大多数人�
 <text x="294" y="46">definition levels</text><text x="294" y="62" fill-opacity="0.65">RLE / bit-packed</text>
 <text x="511" y="46">values</text><text x="511" y="62" fill-opacity="0.65">PLAIN / DICT / DELTA / BSS</text>
 </g>
-<text x="0" y="92" font-size="11.5" fill="currentColor" fill-opacity="0.8">header 里有：页类型、未压缩/压缩字节数、值个数、编码方式、以及（v1 里）levels 的字节长度。</text>
+<text x="0" y="92" font-size="11.5" fill="currentColor" fill-opacity="0.8">header 里有：页类型、未压缩/压缩字节数、值个数、levels 的编码方式（RLE），以及页级统计（可选，pyarrow 会写）。</text>
+<text x="0" y="110" font-size="11.5" fill="currentColor" fill-opacity="0.8">注意 v1 页头不含 levels 的字节长度——要解出 levels 才知道 values 从哪开始（v2 补上了，见下图）。</text>
 <text x="0" y="110" font-size="11.5" fill="currentColor" fill-opacity="0.8">repetition levels 只在嵌套类型（LIST / STRUCT）里出现；扁平表里这一段的长度为 0。</text>
 <text x="0" y="128" font-size="11.5" fill="currentColor" fill-opacity="0.8">definition levels 记录"这一行是不是 null"，非空列全 0 长度，所以扁平非空表几乎不占空间。</text>
 <line x1="0" y1="140" x2="680" y2="140" stroke="currentColor" stroke-opacity="0.15"/>
@@ -183,6 +184,76 @@ page 是"解压"和"剪枝"的最小单位。它的内部布局比大多数人�
 1. **页头不压缩**。所以"读一页"永远是"读页头 + 解压正文"，页头本身有几十到几百字节的开销。页切得太碎，页头开销会反噬压缩收益。
 2. **字典页必须排在该列块的所有数据页之前**。这就是元数据里 `dictionary_page_offset` 总是小于 `data_page_offset` 的原因；两者都存在时，`file_offset` 通常等于字典页的偏移。
 3. **`encodings` 列表是"这个列块用过的编码集合"，不是"整列都用它"**。看到 `PLAIN + RLE + RLE_DICTIONARY` 三个并存，意味着：字典页用了 PLAIN 存字典值、数据页用了 `RLE_DICTIONARY` 存索引、levels 用了 RLE。这也是任务卡里那条坑的由来。
+
+### data page v2：同一份数据的另一种切法
+
+data page 有 v1、v2 两个版本（`PageHeader.type` 分别是 `DATA_PAGE=0` 和 `DATA_PAGE_V2=3`）。v1 是几乎所有写入器的默认；v2 是规范后来补的页格式，写侧要显式开启。与上图 v1 逐段对齐看：
+
+<figure class="diagram">
+<svg width="100%" viewBox="0 0 680 176" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+<title>data page v2 的内部布局（与 v1 逐段对齐）</title>
+<desc>v2 数据页由页头、独立且不压缩的重复级别段、独立且不压缩的定义级别段、单独压缩的值主体组成；levels 的字节长度直接写在页头里。</desc>
+<text x="0" y="14" font-size="13.2" font-weight="500" fill="currentColor">data page v2（同一份数据、同一 zstd，与上图 v1 对齐）</text>
+<g stroke="currentColor" stroke-opacity="0.35" stroke-width="1">
+<rect x="0" y="26" width="150" height="46" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="150" y="26" width="96" height="46" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="246" y="26" width="96" height="46" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="342" y="26" width="338" height="46" fill="#EF9F27" fill-opacity="0.25"/>
+</g>
+<g font-size="10.5" text-anchor="middle" fill="currentColor">
+<text x="75" y="46">page header</text><text x="75" y="62" fill-opacity="0.65">thrift，未压缩，76 B</text>
+<text x="198" y="46">repetition levels</text><text x="198" y="62" fill-opacity="0.65">RLE，不压缩（0 B）</text>
+<text x="294" y="46">definition levels</text><text x="294" y="62" fill-opacity="0.65">RLE，不压缩（4 B）</text>
+<text x="511" y="46">values</text><text x="511" y="62" fill-opacity="0.65">同 v1 编码，单独压缩</text>
+</g>
+<text x="0" y="92" font-size="11.5" fill="currentColor" fill-opacity="0.8">levels 搬出压缩体、永不压缩，字节长度直接写在页头（本例 def=4 B / rep=0 B）——不解压 values 就能扫 levels。</text>
+<text x="0" y="110" font-size="11.5" fill="currentColor" fill-opacity="0.8">页头自描述更强：num_nulls、num_rows 直接给出（v1 只有 num_values）；是否压缩由 is_compressed 显式声明。</text>
+<text x="0" y="128" font-size="11.5" fill="currentColor" fill-opacity="0.8">代价是页头更大（76 B vs 69 B）；且 v2 要求页从行边界开始，一行不允许跨页。</text>
+<line x1="0" y1="140" x2="680" y2="140" stroke="currentColor" stroke-opacity="0.15"/>
+<text x="0" y="160" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">读侧三种实现（Arrow / parquet-rs / DuckDB）都透明支持；收益主要在嵌套稀疏数据与页级剪枝，扁平全非空表上差距不大。</text>
+</svg>
+</figure>
+
+同一份数据、pyarrow 写两遍（只切 `data_page_version`，其余 zstd / 单行组不变）的实测对照：
+
+| 对比项 | v1（实测） | v2（实测） |
+|---|---|---|
+| 页头大小 | 69 B | 76 B（多出的字节换来显式长度与统计） |
+| levels | 与 values 捆在一起进压缩体 | 独立段、不压缩，长度写在页头（def=4 B / rep=0 B） |
+| 页头里的页信息 | num_values + levels 的编码方式 | 另有 num_nulls=0、num_rows、is_compressed=true、可选页级统计 |
+| 压缩粒度 | levels 与 values 整段一起压 | 只压 values，levels 永不压 |
+| 页边界 | 无行对齐要求 | 必须从行边界开始（行不跨页） |
+| 文件总体积 | 1,020,636 B | 1,020,577 B（扁平全非空表上差距可忽略） |
+
+### 怎么知道手里的文件是 v1 还是 v2
+
+判定只需读 2 个字节：页类型是页头的第 1 个 thrift compact 字段，`zigzag varint` 解码后 `0=DATA_PAGE(v1)`、`3=DATA_PAGE_V2`，页头起点就是元数据里的 `data_page_offset`：
+
+```python
+def data_page_version(path: str) -> str:
+    """读 data_page_offset 起的第一个页头 type 字段。"""
+    import pyarrow.parquet as pq
+
+    md = pq.ParquetFile(path).metadata
+    cc = md.row_group(0).column(0)
+    with open(path, "rb") as f:
+        f.seek(cc.data_page_offset)
+        raw = f.read(2)
+    # 第 1 字节是 thrift 字段头(0x15)，第 2 字节是 zigzag varint：
+    # 0x00 -> type=0 (v1)；0x06 -> type=3 (v2)
+    ptype = (raw[1] >> 1) ^ -(raw[1] & 1)
+    return "v2" if ptype == 3 else "v1"
+```
+
+对仓库文件实测输出 `v1`。写入器默认行为（本仓库三件套实测）：
+
+| 写入器 | 默认数据页 | 切到 v2 的方法 |
+|---|---|---|
+| pyarrow | v1 | 写参数 `data_page_version="2.0"`（写侧别名 `2.6` 不被接受，见下） |
+| DuckDB | v1 | 写侧无 v2 页开关；`COPY ... (PARQUET_VERSION v2)` 实测写出的仍是 v1 页 |
+| polars | v1 | 原生写侧无开关（只有 `data_page_size`）；`use_pyarrow=True` 转手 pyarrow 才能切 |
+
+最容易踩的混淆在这里：**"格式版本"和"数据页版本"是两回事**。pyarrow 的 `version="2.6"` 与 DuckDB 的 `PARQUET_VERSION v2` 指的是 Parquet **格式版本**（管的是逻辑类型、nanos 时间戳这类 footer 能力），跟数据页 v1/v2 无关——实测 `PARQUET_VERSION v2` 写出的文件，页头 type 依然是 `DATA_PAGE(0)`。数据页要单独用 `data_page_version` 切，切完用上面的函数验证。
 
 ## 4. 六种编码，各自为哪种分布而生
 
@@ -305,6 +376,7 @@ for rg in range(md.num_row_groups):
 |---|---|---|
 | 默认值陷阱 | pyarrow 几乎给所有列开字典，时间戳/价格列体积被撑大 2–3 倍 | 显式写 `column_encoding`；`ts`/`seq` 用 `DELTA_BINARY_PACKED` |
 | 混淆 `encodings` 与"实际编码" | 以为整列都是字典，结果一半是 PLAIN | 看 `dictionary_page_offset` 是否存在，以及字典页字节占比 |
+| 把格式版本当成数据页版本 | 以为 `version="2.6"` / `PARQUET_VERSION v2` 就写了 v2 数据页，实测仍是 v1 | 格式版本管逻辑类型；数据页用 `data_page_version`，再用上面的判定函数验证 |
 | 把 `row_group_size` 当字节 | 以为设 134217728 就是 128 MB | 它是行数。按 `行数 × 每行字节` 反推 |
 | 用 `min/max` 做精确判断 | 浮点列上误判"不存在" | 检查 `min_value_exact`；精确判断要靠实际扫描 |
 | BSS 一律开 | 低基数浮点列体积暴涨 | 只有高基数、相邻相近的浮点才用；先测再开 |
@@ -314,7 +386,8 @@ for rg in range(md.num_row_groups):
 
 - Apache Parquet, *File Format* — 四层结构、页面类型、`file_offset` / `dictionary_page_offset` 语义
 - Apache Parquet, *Encodings* — 各编码的字节格式与适用条件，`min_value_exact` 的定义
-- `parquet-format` 仓库 `src/main/thrift/parquet.thrift` — `ColumnMetaData` / `PageHeader` 字段的唯一权威定义
+- `parquet-format` 仓库 `src/main/thrift/parquet.thrift` — `ColumnMetaData` / `PageHeader` / `DataPageHeader` / `DataPageHeaderV2` 字段的唯一权威定义
+- 数据页 v1/v2 对比数据：同源文件 pyarrow 写两遍实测（2026-11-12，pyarrow 26.0.1 / duckdb 2.0.0 / polars），判定函数对仓库 `part-600267.SH.parquet` 输出 `v1`
 - parquet-rs `src/file/metadata/mod.rs`、`src/encodings/` — 本项目 `mdlake inspect` 的实现依据（版本 60.1.0）
 - 本章数据：`reports/w02-encoding.md`（脚本 `py/w02_encoding.py`，2026-11-11，pyarrow 26.0.1）
 
