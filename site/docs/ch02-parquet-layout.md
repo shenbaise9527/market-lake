@@ -255,6 +255,63 @@ def data_page_version(path: str) -> str:
 
 最容易踩的混淆在这里：**"格式版本"和"数据页版本"是两回事**。pyarrow 的 `version="2.6"` 与 DuckDB 的 `PARQUET_VERSION v2` 指的是 Parquet **格式版本**（管的是逻辑类型、nanos 时间戳这类 footer 能力），跟数据页 v1/v2 无关——实测 `PARQUET_VERSION v2` 写出的文件，页头 type 依然是 `DATA_PAGE(0)`。数据页要单独用 `data_page_version` 切，切完用上面的函数验证。
 
+### levels：把嵌套结构压平的伴随流
+
+页布局里那两段 `repetition levels / definition levels` 是干什么的最容易含糊。Parquet 把嵌套类型（LIST / STRUCT、可空字段）**压平**成一列值存储，值流本身不携带任何"归属"信息——谁来记录这串值原来是几行、是第几个元素、哪里是 null？就是这两条 RLE 伴随流，**每个值都带一对 (def, rep)**：
+
+- **definition level**：这条路径上有几层 optional 字段**有值**。`def = max_def` 说明值是真的；小于它说明中间某层是 null。它同时能表达空列表这类"壳在、没值"的状态。
+- **repetition level**：这个值和前一个值的关系。`rep = 0` 是新行的开始；`rep = n` 表示还在第 n 层重复字段的同一个容器里。它负责把压平的值流**重新拼回行**。
+
+用一个列表列（`a: optional list of optional item`）看全貌，三行逻辑数据 `[1,2] / [] / null`：
+
+<figure class="diagram">
+<svg width="100%" viewBox="0 0 680 208" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+<title>definition level 与 repetition level 的含义</title>
+<desc>逻辑上三行列表数据，压平后每个值伴随一对 def 与 rep 级别；def 记录路径上有几层 optional 有值，rep 记录与前一值是否同一行同一列表。</desc>
+<text x="0" y="14" font-size="13.2" font-weight="500" fill="currentColor">逻辑数据（左）与压平后的存储流（右）</text>
+<g stroke="currentColor" stroke-opacity="0.35" stroke-width="1">
+<rect x="0" y="26" width="150" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="0" y="60" width="150" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="0" y="94" width="150" height="28" fill="currentColor" fill-opacity="0.06"/>
+</g>
+<g font-size="10.5" fill="currentColor">
+<text x="10" y="45">行 1：a = [1, 2]</text>
+<text x="10" y="79">行 2：a = [ ]（空列表）</text>
+<text x="10" y="113">行 3：a = null</text>
+</g>
+<g stroke="currentColor" stroke-opacity="0.35" stroke-width="1">
+<rect x="230" y="26" width="80" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="316" y="26" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
+<rect x="382" y="26" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
+<rect x="230" y="60" width="80" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="316" y="60" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
+<rect x="382" y="60" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
+<rect x="230" y="94" width="80" height="28" fill="currentColor" fill-opacity="0.06"/>
+<rect x="316" y="94" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
+<rect x="382" y="94" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
+<rect x="230" y="128" width="80" height="28" fill="currentColor" fill-opacity="0.06"/>
+<rect x="316" y="128" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
+<rect x="382" y="128" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
+</g>
+<g font-size="10.5" text-anchor="middle" fill="currentColor">
+<text x="270" y="45">值 1</text><text x="346" y="45" fill="#1D9E75">def=2</text><text x="412" y="45" fill="#854F0B">rep=0</text>
+<text x="270" y="79">值 2</text><text x="346" y="79" fill="#1D9E75">def=2</text><text x="412" y="79" fill="#854F0B">rep=1</text>
+<text x="270" y="113">（无值）</text><text x="346" y="113" fill="#1D9E75">def=1</text><text x="412" y="113" fill="#854F0B">rep=0</text>
+<text x="270" y="147">（无值）</text><text x="346" y="147" fill="#1D9E75">def=0</text><text x="412" y="147" fill="#854F0B">rep=0</text>
+</g>
+<g font-size="10.5" fill="currentColor" fill-opacity="0.8">
+<text x="470" y="45">a、item 两层都有值，跟真值</text>
+<text x="470" y="79">与值 1 同行、同列表的下一个元素</text>
+<text x="470" y="113">a 有值但列表空（或 item 为 null）</text>
+<text x="470" y="147">a 本身是 null，整条路径无值</text>
+</g>
+<text x="0" y="182" font-size="11.5" fill="currentColor" fill-opacity="0.8">读侧按 def 重建 null、按 rep 重建行边界——嵌套结构全靠这两条流还原。</text>
+<text x="0" y="200" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">退化到扁平表：max_def=1 时 def 恒为 1（RLE 压成 4 B），max_rep=0 时 rep 恒为 0（0 B）——正是上面 v2 页头的实测值。</text>
+</svg>
+</figure>
+
+这也是第 4 节编码表里 `RLE` 的主战场之一：levels 几乎全是小整数、大量重复，RLE/bit-packed 混合编码是它们唯一指定的编码。而 v2 把 levels 独立成不压缩的段（本节开头两张图），让读侧**不解压 values 也能先扫 levels**——全 null 页可以整页跳过解压，这是 v2 在剪枝上最大的收益。
+
 ## 4. 六种编码，各自为哪种分布而生
 
 | 编码 | 编码后的样子 | 适合 | 不适合 | 本仓库实测（73,375 行） |
@@ -345,6 +402,25 @@ uv run python py/w02_encoding.py     # 产出 reports/w02-encoding.md
 
 一个必须知道的语义坑：**浮点列的 `min`/`max` 可能是近似值**。规范里有 `min_value_exact` / `max_value_exact` 两个布尔标记，为 false 时表示该边界可能被截断过（历史实现遗留）。拿它做"一定不存在"的断言会出错。整数与字符串没有这个问题。
 
+### 实测：页级剪枝到底省多少
+
+页级剪枝的规则一句话：**查询区间 ∩ [页 min, 页 max] = 空 → 整页不读**。它和行组级剪枝是同一套逻辑套了两层粒度——footer 的行组统计先跳行组，page index 再在存活的行组里跳页。
+
+它到底值多少钱，取决于数据的有序程度。用 10 万行递增 `ts` 写两份文件（唯一区别：一份保序、一份打乱行序；都开 page index，切成 7 页，zstd），查询窗口取中间约 0.1% 的时间范围，把 page index（`ColumnIndex` + `OffsetIndex`，二进制在 footer 后面的独立段）逐字节解析出来算相交页数：
+
+| 数据 | 相交页数 | 必读字节 | 节省 |
+|---|---|---|---|
+| 有序 | **1 / 7 页** | 29,199 / 192,575 B | **85%** |
+| 乱序 | **7 / 7 页** | 192,575 / 192,575 B | **0%** |
+
+乱序为什么一页都剪不掉：打乱行序后每页里都有接近全范围的值，每页的 `[min, max]` 都横跨整个时间轴，区间彼此完全覆盖。剪枝是"数据规律的放大器"，不是"引擎的魔法"——**没有排序，就没有剪枝**。这是第 5 节"排序比编码更基础"的第二个证据（第一个是 DELTA 编码退化）。
+
+三个使用前提值得记：
+
+1. **页级剪枝不是免费的默认项**。page index 要写侧显式开启（pyarrow `write_page_index=True`），不开的话行组内只能整块读；页越细索引越准，但页头开销也越大。
+2. **剪枝回答的是"可能有"，不是"一定没有"**。`min/max` 只能排除区间不相交的部分；按 `seq` 找缺口这种"证明不存在"的问题，任何统计都帮不上。
+3. **浮点列的 min/max 有近似坑**（上面的 `min_value_exact`），等值剪枝别信它。
+
 ## 7. 代码：用 20 行复刻 inspect
 
 `mdlake inspect` 干的事，用 pyarrow 复刻只要二十来行——这本身就是理解格式的最好检验：
@@ -381,6 +457,7 @@ for rg in range(md.num_row_groups):
 | 用 `min/max` 做精确判断 | 浮点列上误判"不存在" | 检查 `min_value_exact`；精确判断要靠实际扫描 |
 | BSS 一律开 | 低基数浮点列体积暴涨 | 只有高基数、相邻相近的浮点才用；先测再开 |
 | 页切太碎 | 压缩比下降、页头开销上升 | `data_page_size` 保持在 1 MB 量级，除非确实需要细粒度剪枝 |
+| 以为页级剪枝天然生效 | 没开 page index，行组内只能整块读，怎么调页大小都不剪 | 写侧显式 `write_page_index=True`；再用 `has_column_index` / `has_offset_index` 确认 |
 
 ## 9. 出处
 
@@ -388,6 +465,8 @@ for rg in range(md.num_row_groups):
 - Apache Parquet, *Encodings* — 各编码的字节格式与适用条件，`min_value_exact` 的定义
 - `parquet-format` 仓库 `src/main/thrift/parquet.thrift` — `ColumnMetaData` / `PageHeader` / `DataPageHeader` / `DataPageHeaderV2` 字段的唯一权威定义
 - 数据页 v1/v2 对比数据：同源文件 pyarrow 写两遍实测（2026-11-12，pyarrow 26.0.1 / duckdb 2.0.0 / polars），判定函数对仓库 `part-600267.SH.parquet` 输出 `v1`
+- 页级剪枝实测：10 万行 `ts` 有序/乱序各写一份（`data_page_size=32KB`、`write_page_index=True`、zstd），按 thrift 解析 `ColumnIndex` / `OffsetIndex` 计算相交页与必读字节（2026-11-12，pyarrow 26.0.1）
+- levels 语义：Parquet *File Format* 的 Nesting / Levels 小节；扁平表 def/rep 的字节数取自本页 v2 页头实测（4 B / 0 B）
 - parquet-rs `src/file/metadata/mod.rs`、`src/encodings/` — 本项目 `mdlake inspect` 的实现依据（版本 60.1.0）
 - 本章数据：`reports/w02-encoding.md`（脚本 `py/w02_encoding.py`，2026-11-11，pyarrow 26.0.1）
 
