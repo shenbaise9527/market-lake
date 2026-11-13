@@ -452,7 +452,7 @@ uv run python py/w02_encoding.py     # 产出 reports/w02-encoding.md
 | 层 | 存在哪 | 记录什么 | 能跳过 | 代价 |
 |---|---|---|---|---|
 | column chunk stats | footer | 每列每行组的 `min` / `max` / `null_count` / `distinct_count` | **整个行组** | 几乎为 0，默认开启 |
-| page index | footer 附近的独立段 | 每页的 `min` / `max` + 页的字节偏移 | **一页**（约 1 MB） | 文件略增（本例 +0.1 KB），读取时多一次 IO |
+| page index | footer 附近的独立段 | 每页的 `min` / `max` + 页的字节偏移 | **一页**（约 1 MB，需读端支持） | 文件略增（本例 +0.1 KB），读取时多一次 IO |
 | bloom filter | 列块尾部 | 值是否**可能存在**（等值判断） | 整个行组（等值查询） | 体积约 1–2%，只对等值有效 |
 
 对行情数据来说，这三层的分工很具体：
@@ -481,6 +481,29 @@ uv run python py/w02_encoding.py     # 产出 reports/w02-encoding.md
 1. **页级剪枝不是免费的默认项**。page index 要写侧显式开启（pyarrow `write_page_index=True`），不开的话行组内只能整块读；页越细索引越准，但页头开销也越大。
 2. **剪枝回答的是"可能有"，不是"一定没有"**。`min/max` 只能排除区间不相交的部分；按 `seq` 找缺口这种"证明不存在"的问题，任何统计都帮不上。
 3. **浮点列的 min/max 有近似坑**（上面的 `min_value_exact`），等值剪枝别信它。
+
+### 但引擎真的会跳页吗：实测说不
+
+上面那张 85% 是**索引能给的上限**，不是引擎实际省下的量。把索引开了、数据也排好了，用 300 万行 `ts`（单行组、8 KB 页，约 1300 页）测同样只命中 601 行的窄窗口查询：
+
+| 场景 | DuckDB 2.0.0 | 读了多少 |
+|---|---|---|
+| 有序 + page index | 40.0 ms | `Data Read: 10.8 MB`，等于整个列块；`Row Groups Scanned: 1 / 1` |
+| 有序、不写索引 | 26.1 ms | 整列块（写索引反而多花时间） |
+| 乱序 + page index | 45.4 ms | 整列块 |
+| **同数据切 20 个行组** | **4.6 ms** | 1 个行组 |
+
+polars 2.1.0 同样没有页级收益：有序 58.2 ms、乱序 54.7 ms，差值在噪声内。对照组的 40.6 → 4.6 ms 说明剪枝机制本身是通的——**生效的是行组级，页级全程没动**。
+
+不是配置问题，是读端没实现：
+
+- DuckDB 的 Parquet 扫描器只读 row group statistics 与 bloom filter，不读 `column_index_offset` / `offset_index_offset`；它自己 `COPY` 写出的文件里 `has_column_index` 就是 `False`。
+- Arrow / pyarrow 官方文档明确说明读端尚不使用 page index（pyarrow 也没有公开 API 读 `ColumnIndex`，这也是本页要自己写 thrift 解析器的原因）。
+- 页大小对读放大没影响，只影响页头开销：同一份数据 8 KB 页读 10.8 MB / 40.0 ms，1 MB 页读 18.9 MB / 27.7 ms——**页越碎越慢**。
+
+所以 page index 当下的实际价值是另外三件事：给**支持页级跳过的读端**（少数引擎与自研 reader）留出能力；用 `OffsetIndex` **精确定位单个页**做 ranged read（点查、单行随机访问、并行分片）；以及**离线分析**文件内部的分布（本页那张 85% 就是这么算出来的）。
+
+推论很实际：**想减少 IO，先调行组大小，别指望页**。同理，页级剪枝只对"过滤列自身"有效——其它列要省，得先读过滤列再按命中行回填页（late materialization），实现更罕见。
 
 ## 7. 代码：用 20 行复刻 inspect
 
@@ -520,12 +543,14 @@ for rg in range(md.num_row_groups):
 | 页切太碎 | 压缩比下降、页头开销上升 | `data_page_size` 保持在 1 MB 量级，除非确实需要细粒度剪枝 |
 | 以为页级剪枝天然生效 | 没开 page index，行组内只能整块读，怎么调页大小都不剪 | 写侧显式 `write_page_index=True`；再用 `has_column_index` / `has_offset_index` 确认 |
 | 以为页头有长度前缀 | 直接 seek 到页头后固定偏移读 values，读到的是 levels 的字节 | 页头靠 thrift 的 `0x00` STOP 自定界，必须解析完才知道 values 起点 |
+| 以为开了 page index 就会跳页 | 索引写好了、数据也排好了，查询照样读整个列块 | 页级跳过要读端支持；DuckDB / polars / Arrow 实测都只剪行组，想省 IO 先调行组大小 |
 
 ## 9. 出处
 
 - Apache Parquet, *File Format* — 四层结构、页面类型、`file_offset` / `dictionary_page_offset` 语义
 - Apache Parquet, *Encodings* — 各编码的字节格式与适用条件，`min_value_exact` 的定义
 - `parquet-format` 仓库 `src/main/thrift/parquet.thrift` — `ColumnMetaData` / `PageHeader` / `DataPageHeader` / `DataPageHeaderV2` 字段的唯一权威定义
+- 引擎页级剪枝实测（2026-11-13，duckdb 2.0.0 / polars 2.1.0 / pyarrow 26.0.1）：300 万行 `ts` 单行组 8 KB 页，命中 601 行时 `Data Read: 10.8 MB`（整列块）、`Row Groups Scanned: 1/1`；同数据切 20 行组降到 4.6 ms
 - 页头 thrift 逐字段解码数据：仓库 `part-600267.SH.parquet` 的 `ts` 列第 1 个数据页实测（2026-11-13，pyarrow 26.0.1），页头 69 B，`data_page_offset=488407`
 - 数据页 v1/v2 对比数据：同源文件 pyarrow 写两遍实测（2026-11-12，pyarrow 26.0.1 / duckdb 2.0.0 / polars），判定函数对仓库 `part-600267.SH.parquet` 输出 `v1`
 - 页级剪枝实测：10 万行 `ts` 有序/乱序各写一份（`data_page_size=32KB`、`write_page_index=True`、zstd），按 thrift 解析 `ColumnIndex` / `OffsetIndex` 计算相交页与必读字节（2026-11-12，pyarrow 26.0.1）
