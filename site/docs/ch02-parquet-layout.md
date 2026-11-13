@@ -185,6 +185,67 @@ page 是"解压"和"剪枝"的最小单位。它的内部布局比大多数人�
 2. **字典页必须排在该列块的所有数据页之前**。这就是元数据里 `dictionary_page_offset` 总是小于 `data_page_offset` 的原因；两者都存在时，`file_offset` 通常等于字典页的偏移。
 3. **`encodings` 列表是"这个列块用过的编码集合"，不是"整列都用它"**。看到 `PLAIN + RLE + RLE_DICTIONARY` 三个并存，意味着：字典页用了 PLAIN 存字典值、数据页用了 `RLE_DICTIONARY` 存索引、levels 用了 RLE。这也是任务卡里那条坑的由来。
 
+### 页头为什么是 thrift 编码
+
+上面两张图的页头都标着"thrift，未压缩"，这不是随手挑的序列化库。**thrift 是 Apache 的 IDL + 二进制协议**：parquet-format 仓库用一份 `parquet.thrift` 定义全部元数据结构（`FileMetaData` / `SchemaElement` / `RowGroup` / `ColumnChunk` / `PageHeader` / `Statistics`），Java、C++、Python、Rust 的实现都从这同一份 IDL 生成 struct——没有人手写字节打包，也没有各语言各写一套。
+
+它不是"可选实现细节"，页里能不能找到 values 就靠它。把仓库文件 `part-600267.SH.parquet` 的 `ts` 列第 1 个数据页页头逐字节解出来（页头起于 `data_page_offset`）：
+
+<figure class="diagram">
+<svg width="100%" viewBox="0 0 680 168" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+<title>一个 data page 页头的 thrift 字节布局</title>
+<desc>页头由若干「字段头 + 值」依次组成，读到 0x00 STOP 结束，紧接其后才是 values 主体；实测页头长 69 字节。</desc>
+<text x="0" y="14" font-size="13.2" font-weight="500" fill="currentColor">页头的字节流：字段头与值交替，0x00 收尾</text>
+<g font-size="11" fill="currentColor" fill-opacity="0.75" text-anchor="middle">
+<text x="45" y="40">fid 1 · 页类型</text>
+<text x="164" y="40">fid 2 · 未压缩大小</text>
+<text x="308" y="40">fid 3 · 压缩后大小</text>
+<text x="482" y="40">fid 5 · data_page_header</text>
+<text x="633" y="40">values 主体</text>
+</g>
+<g stroke="currentColor" stroke-opacity="0.35" stroke-width="1">
+<rect x="0" y="48" width="90" height="40" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="94" y="48" width="140" height="40" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="238" y="48" width="140" height="40" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="382" y="48" width="200" height="40" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="586" y="48" width="94" height="40" fill="#EF9F27" fill-opacity="0.25"/>
+</g>
+<g font-size="12" font-family="ui-monospace, monospace" text-anchor="middle" fill="currentColor">
+<text x="45" y="73">15 00</text>
+<text x="164" y="73">15 de 86 13</text>
+<text x="308" y="73">15 fe c5 12</text>
+<text x="482" y="73">2c 15 10 … 00</text>
+<text x="633" y="73">151,935 B</text>
+</g>
+<line x1="585" y1="44" x2="585" y2="94" stroke="currentColor" stroke-opacity="0.4" stroke-width="1" stroke-dasharray="3 3"/>
+<text x="0" y="112" font-size="11.5" fill="currentColor" fill-opacity="0.85">页头没有长度前缀：一路解析到 0x00（STOP）才结束——实测 69 B，第 70 个字节起才是 values。</text>
+<text x="0" y="130" font-size="11.5" fill="currentColor" fill-opacity="0.8">字段头占 1 B：高 4 位是字段号增量、低 4 位是类型（5=i32、12=struct）；整数用 zigzag varint，小数值只占 1 B。</text>
+<text x="0" y="148" font-size="11.5" fill="currentColor" fill-opacity="0.8">字段号就是兼容契约：crc 占 4 号、v2 页头占 8 号、页级统计都是后加的，老读者按号跳过不认识的字段即可。</text>
+</svg>
+</figure>
+
+完整解码结果（同一页，69 B）：
+
+| 偏移 | 字段 | 值 |
+|---|---|---|
+| +0 | 1 `type` | 0（`DATA_PAGE`，即 v1） |
+| +2 | 2 `uncompressed_page_size` | 156,079 |
+| +6 | 3 `compressed_page_size` | 151,935 |
+| +10 | 5 `data_page_header` | 子结构：`num_values=73,375`、`encoding=8`（`RLE_DICTIONARY`）、def / rep 编码均为 `RLE(3)`、页级 `statistics` |
+| +69 | `0x00` | STOP：页头结束 |
+
+所以 thrift 在这里干三件事：
+
+1. **让页头自定界**（最实际的一条）。页头前没有 4 字节长度、页头里也没写自身长度，读侧只能"解析到 STOP"。这也解释了 v1 的困境：页头解析完只知道 levels 的编码方式，不知道 levels 有多长，得先解压才知道 values 从哪开始；v2 是在 thrift 里**补了 `definition_levels_byte_length` / `repetition_levels_byte_length` 两个字段**，把边界提前告诉读侧。
+2. **字段号做兼容契约**。字段按 id + 类型传输，没赋值的字段不写；新字段用新号，老读者按类型跳过即可，不需要改 magic 或 bump 文件版本。v2 页头能被 v2 之前的引擎降级读，靠的就是这条。
+3. **省字节**。字段头 1 字节带 delta、整数 varint，才可能把 7 个字段加一整个统计子结构塞进 69 字节。按页算，一天的数据要切出成百上千页，页头开销是实打实的；文本格式（JSON）在这一层不可行。
+
+代价也得知道：
+
+- **只能顺序解析**，不能随机访问某个字段。所以每次定位一个页都要解页头——footer 里再存一份列块级统计的价值正在于此（免扫全部页头）。
+- **字段号写错就会字节漂移**，且不报错、只给出垃圾值。本仓库写这段解析时就把 `data_page_header` 记成了 4 号（4 号现在是 `crc`），一路解到 statistics 才露馅，最后拉官方 `parquet.thrift` 才对上。
+- **footer 用的是同一套 thrift**：结构是 `[4 B FileMetaData 长度][FileMetaData thrift][PAR1]`，所以同一个解析器能吃页头和 footer 两处元数据。
+
 ### data page v2：同一份数据的另一种切法
 
 data page 有 v1、v2 两个版本（`PageHeader.type` 分别是 `DATA_PAGE=0` 和 `DATA_PAGE_V2=3`）。v1 是几乎所有写入器的默认；v2 是规范后来补的页格式，写侧要显式开启。与上图 v1 逐段对齐看：
@@ -458,12 +519,14 @@ for rg in range(md.num_row_groups):
 | BSS 一律开 | 低基数浮点列体积暴涨 | 只有高基数、相邻相近的浮点才用；先测再开 |
 | 页切太碎 | 压缩比下降、页头开销上升 | `data_page_size` 保持在 1 MB 量级，除非确实需要细粒度剪枝 |
 | 以为页级剪枝天然生效 | 没开 page index，行组内只能整块读，怎么调页大小都不剪 | 写侧显式 `write_page_index=True`；再用 `has_column_index` / `has_offset_index` 确认 |
+| 以为页头有长度前缀 | 直接 seek 到页头后固定偏移读 values，读到的是 levels 的字节 | 页头靠 thrift 的 `0x00` STOP 自定界，必须解析完才知道 values 起点 |
 
 ## 9. 出处
 
 - Apache Parquet, *File Format* — 四层结构、页面类型、`file_offset` / `dictionary_page_offset` 语义
 - Apache Parquet, *Encodings* — 各编码的字节格式与适用条件，`min_value_exact` 的定义
 - `parquet-format` 仓库 `src/main/thrift/parquet.thrift` — `ColumnMetaData` / `PageHeader` / `DataPageHeader` / `DataPageHeaderV2` 字段的唯一权威定义
+- 页头 thrift 逐字段解码数据：仓库 `part-600267.SH.parquet` 的 `ts` 列第 1 个数据页实测（2026-11-13，pyarrow 26.0.1），页头 69 B，`data_page_offset=488407`
 - 数据页 v1/v2 对比数据：同源文件 pyarrow 写两遍实测（2026-11-12，pyarrow 26.0.1 / duckdb 2.0.0 / polars），判定函数对仓库 `part-600267.SH.parquet` 输出 `v1`
 - 页级剪枝实测：10 万行 `ts` 有序/乱序各写一份（`data_page_size=32KB`、`write_page_index=True`、zstd），按 thrift 解析 `ColumnIndex` / `OffsetIndex` 计算相交页与必读字节（2026-11-12，pyarrow 26.0.1）
 - levels 语义：Parquet *File Format* 的 Nesting / Levels 小节；扁平表 def/rep 的字节数取自本页 v2 页头实测（4 B / 0 B）
