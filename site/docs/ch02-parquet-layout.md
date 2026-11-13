@@ -265,7 +265,7 @@ def data_page_version(path: str) -> str:
 用一个列表列（`a: optional list of optional item`）看全貌，三行逻辑数据 `[1,2] / [] / null`：
 
 <figure class="diagram">
-<svg width="100%" viewBox="0 0 680 208" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
+<svg width="100%" viewBox="0 0 680 212" role="img" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif">
 <title>definition level 与 repetition level 的含义</title>
 <desc>逻辑上三行列表数据，压平后每个值伴随一对 def 与 rep 级别；def 记录路径上有几层 optional 有值，rep 记录与前一值是否同一行同一列表。</desc>
 <text x="0" y="14" font-size="13.2" font-weight="500" fill="currentColor">逻辑数据（左）与压平后的存储流（右）</text>
@@ -274,39 +274,39 @@ def data_page_version(path: str) -> str:
 <rect x="0" y="60" width="150" height="28" fill="#378ADD" fill-opacity="0.25"/>
 <rect x="0" y="94" width="150" height="28" fill="currentColor" fill-opacity="0.06"/>
 </g>
-<g font-size="10.5" fill="currentColor">
+<g font-size="11.5" fill="currentColor">
 <text x="10" y="45">行 1：a = [1, 2]</text>
 <text x="10" y="79">行 2：a = [ ]（空列表）</text>
 <text x="10" y="113">行 3：a = null</text>
 </g>
 <g stroke="currentColor" stroke-opacity="0.35" stroke-width="1">
-<rect x="230" y="26" width="80" height="28" fill="#378ADD" fill-opacity="0.25"/>
-<rect x="316" y="26" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
-<rect x="382" y="26" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
-<rect x="230" y="60" width="80" height="28" fill="#378ADD" fill-opacity="0.25"/>
-<rect x="316" y="60" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
-<rect x="382" y="60" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
-<rect x="230" y="94" width="80" height="28" fill="currentColor" fill-opacity="0.06"/>
-<rect x="316" y="94" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
-<rect x="382" y="94" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
-<rect x="230" y="128" width="80" height="28" fill="currentColor" fill-opacity="0.06"/>
-<rect x="316" y="128" width="60" height="28" fill="#1D9E75" fill-opacity="0.35"/>
-<rect x="382" y="128" width="60" height="28" fill="#EF9F27" fill-opacity="0.35"/>
+<rect x="230" y="26" width="84" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="322" y="26" width="84" height="28" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="414" y="26" width="84" height="28" fill="#EF9F27" fill-opacity="0.3"/>
+<rect x="230" y="60" width="84" height="28" fill="#378ADD" fill-opacity="0.25"/>
+<rect x="322" y="60" width="84" height="28" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="414" y="60" width="84" height="28" fill="#EF9F27" fill-opacity="0.3"/>
+<rect x="230" y="94" width="84" height="28" fill="currentColor" fill-opacity="0.06"/>
+<rect x="322" y="94" width="84" height="28" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="414" y="94" width="84" height="28" fill="#EF9F27" fill-opacity="0.3"/>
+<rect x="230" y="128" width="84" height="28" fill="currentColor" fill-opacity="0.06"/>
+<rect x="322" y="128" width="84" height="28" fill="#1D9E75" fill-opacity="0.3"/>
+<rect x="414" y="128" width="84" height="28" fill="#EF9F27" fill-opacity="0.3"/>
 </g>
-<g font-size="10.5" text-anchor="middle" fill="currentColor">
-<text x="270" y="45">值 1</text><text x="346" y="45" fill="#1D9E75">def=2</text><text x="412" y="45" fill="#854F0B">rep=0</text>
-<text x="270" y="79">值 2</text><text x="346" y="79" fill="#1D9E75">def=2</text><text x="412" y="79" fill="#854F0B">rep=1</text>
-<text x="270" y="113">（无值）</text><text x="346" y="113" fill="#1D9E75">def=1</text><text x="412" y="113" fill="#854F0B">rep=0</text>
-<text x="270" y="147">（无值）</text><text x="346" y="147" fill="#1D9E75">def=0</text><text x="412" y="147" fill="#854F0B">rep=0</text>
+<g font-size="12" text-anchor="middle" fill="currentColor">
+<text x="272" y="45">值 1</text><text x="364" y="45">def=2</text><text x="456" y="45">rep=0</text>
+<text x="272" y="79">值 2</text><text x="364" y="79">def=2</text><text x="456" y="79">rep=1</text>
+<text x="272" y="113">（无值）</text><text x="364" y="113">def=1</text><text x="456" y="113">rep=0</text>
+<text x="272" y="147">（无值）</text><text x="364" y="147">def=0</text><text x="456" y="147">rep=0</text>
 </g>
-<g font-size="10.5" fill="currentColor" fill-opacity="0.8">
-<text x="470" y="45">a、item 两层都有值，跟真值</text>
-<text x="470" y="79">与值 1 同行、同列表的下一个元素</text>
-<text x="470" y="113">a 有值但列表空（或 item 为 null）</text>
-<text x="470" y="147">a 本身是 null，整条路径无值</text>
+<g font-size="11" fill="currentColor" fill-opacity="0.8">
+<text x="510" y="45">两层 optional 都有值</text>
+<text x="510" y="79">同行同列表的下一个元素</text>
+<text x="510" y="113">a 有值，列表为空</text>
+<text x="510" y="147">a 是 null，整条路径无值</text>
 </g>
-<text x="0" y="182" font-size="11.5" fill="currentColor" fill-opacity="0.8">读侧按 def 重建 null、按 rep 重建行边界——嵌套结构全靠这两条流还原。</text>
-<text x="0" y="200" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">退化到扁平表：max_def=1 时 def 恒为 1（RLE 压成 4 B），max_rep=0 时 rep 恒为 0（0 B）——正是上面 v2 页头的实测值。</text>
+<text x="0" y="184" font-size="11.5" fill="currentColor" fill-opacity="0.8">读侧按 def 重建 null、按 rep 重建行边界——嵌套结构全靠这两条流还原。</text>
+<text x="0" y="204" font-size="11.5" fill="currentColor" fill-opacity="0.85" font-weight="500">退化到扁平表：def 恒为 1 → RLE 压成 4 B；rep 恒为 0 → 0 B——正是上面 v2 页头的实测值。</text>
 </svg>
 </figure>
 
